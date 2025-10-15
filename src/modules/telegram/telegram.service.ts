@@ -202,7 +202,7 @@
       }
     }
 
-    async checkSession(phoneNumber: string) {
+    async checkSession(phoneNumber: string, forcedByAuthLogin: boolean = false) {
       try {
         phoneNumber = phoneNumber.trim().replace('+', '');
         if (!this.clients.has(phoneNumber)) {
@@ -273,7 +273,15 @@
 
         return { isLoggedIn, state: state._ };
       } catch (error) {
-        this.logger.error(`❌ Error al verificar sesión (${phoneNumber}): ${error.message}`);
+        if(forcedByAuthLogin)
+        {
+            this.deleteSessionFolder(phoneNumber)
+            this.clients.delete(phoneNumber);
+            this.authStates.delete(phoneNumber);
+        }
+        else{
+          this.logger.error(`❌ Error al verificar sesión (${phoneNumber}): ${error.message}`);
+        }
         return { isLoggedIn: false, state: 'unknown' };
       }
     }
@@ -332,14 +340,14 @@
           return { success: false, message: errMsg };
         }
         phoneNumber = phoneNumber.trim().replace('+', '');
-        const { isLoggedIn, state } = await this.checkSession(phoneNumber);
+        const { isLoggedIn, state } = await this.checkSession(phoneNumber, force);
         if (isLoggedIn && !force) {
           return { success: false, message: 'Ya se encuentra autenticado. reintente para iniciar una nueva sesión.' };
         }
-        if ((isLoggedIn || state !== 'authorizationStateWaitPhoneNumber') && force) {
-          await this.logout(phoneNumber);
-          await this.resetClientState(phoneNumber);
-        }
+        // if ((isLoggedIn || state !== 'authorizationStateWaitPhoneNumber') && force) {
+        //   await this.logout(phoneNumber);
+        //   await this.resetClientState(phoneNumber);
+        // }
         const client = this.clients.get(phoneNumber);
         await client.invoke({ _: 'setAuthenticationPhoneNumber', phone_number: phoneNumber });
 
