@@ -1,8 +1,11 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 import WebSocket from 'ws';
 import { InvalidateInboxCredentialDto } from 'src/common/dto/crm/credentials/invalidate-inbox-credentials.dto';
+import { CreateChannelCitizenDto } from '../chatsat/dto/create-channel-citizen.dto';
+import { CreateSurveyDto } from '../chatsat/dto/create-survey.dto';
+import { HttpException } from '@nestjs/common';
 
 @Injectable()
 export class ChatHubService {
@@ -19,7 +22,15 @@ export class ChatHubService {
     });
   }
 
-
+  private handleErrorFromCRM(error: any)
+  {
+    if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        throw new HttpException(data, status);
+    }
+    throw new HttpException('Error al comunicarse con el CRM', 500);
+  }
 
   async invalidateCredentials(payload: InvalidateInboxCredentialDto){
     try {
@@ -31,45 +42,61 @@ export class ChatHubService {
     }
   }
 
-//   connect() {
-//     this.webSocket = new WebSocket('ws://localhost:3001');
+  async checkForAvailableAdvisors(): Promise<{ availableAdvisors: number }> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const crmResponse = await this.client.get("v1/channel-room/check-available-advisors")
+        resolve(crmResponse.data);
+      } catch (error) {	
+        this.handleErrorFromCRM(error)
+      }
+    });
+  }
 
-//     this.webSocket.on('open', () => {
-//       console.log('Conectado al WebSocket local');
-//       this.sendMessage({
-//         type: 'session.status',
-//         payload: {
-//           channel: 'crm',
-//           sessionId: 'canal-crm1',
-//           status: 'connected',
-//           timestamp: new Date().toISOString(),
-//         },
-//       });
-//     });
+  async createCitizenInCrm(payload: CreateChannelCitizenDto): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const crmResponse = await this.client.post("v1/channel-citizen", payload)
+        resolve(crmResponse.data);
+      } catch (error) {	
+        this.handleErrorFromCRM(error)
+      }
+    });
+  }
 
-//     this.webSocket.on('message', (data) => {
-//       try {
-//         const message = JSON.parse(data.toString());
-//         console.log('Mensaje recibido:', message);
-//       } catch (err) {
-//         console.error('Error parseando mensaje JSON:', err);
-//       }
-//     });
 
-//     this.webSocket.on('close', () => {
-//       console.log('Conexión WebSocket cerrada');
-//     });
+  async sendMessagesHtmlFromChannelAttentionForChatsat(attentionId: number, authHeader: string): Promise<any> {
+    try {
+      const crmResponse = await this.client.post(
+        `v1/channel-room/assistances/${attentionId}/chatsat/send-to-email`,
+        {},
+        {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      );
+      return crmResponse.data;
+    } catch (error) {
+      this.handleErrorFromCRM(error)
+    }
+  }
 
-//     this.webSocket.on('error', (error) => {
-//       console.error('Error WebSocket:', error);
-//     });
-//   }
 
-//   sendMessage(message: any) {
-//     if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
-//       this.webSocket.send(JSON.stringify(message));
-//     } else {
-//       console.warn('WebSocket no está abierto, no se pudo enviar mensaje');
-//     }
-//   }
+  async SurveyCreate(payload: CreateSurveyDto, authHeader: string): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const crmResponse = await this.client.post("v1/channel-citizen/create-survey", payload,
+          {
+            headers: {
+              Authorization: authHeader, 
+            },
+          }
+        )
+        resolve(crmResponse.data);
+      } catch (error) {	
+        this.handleErrorFromCRM(error)
+      }
+    });
+  }
 }

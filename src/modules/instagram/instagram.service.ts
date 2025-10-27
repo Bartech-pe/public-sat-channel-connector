@@ -78,7 +78,7 @@ export class InstagramService {
         `https://graph.facebook.com/${this.apiVersion}/${this.appId}/subscriptions`,
         {
           object: 'page',
-          callback_url: `${this.baseUrl}/instagram/webhook`,
+          callback_url: `${this.baseUrl}instagram/webhook`,
           verify_token: this.webhookVerifyToken,
           fields: [
             'messages',
@@ -97,7 +97,7 @@ export class InstagramService {
         `https://graph.facebook.com/${this.apiVersion}/${this.appId}/subscriptions`,
         {
           object: 'instagram',
-          callback_url: `${this.baseUrl}/instagram/webhook`,
+          callback_url: `${this.baseUrl}instagram/webhook`,
           verify_token: this.webhookVerifyToken,
           fields: ['messages', 'message_reactions'],
         },

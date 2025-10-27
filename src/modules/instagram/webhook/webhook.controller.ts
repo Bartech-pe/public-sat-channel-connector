@@ -46,6 +46,6 @@ export class WebhookController {
 
   @Get('config')
   config(@Res() res: Response) {
-    res.json({ success: true, webhookUrl: `${process.env.BASE_URL}/instagram/webhook`, verifyToken: this.VERIFY_TOKEN ? 'set' : 'not set' });
+    res.json({ success: true, webhookUrl: `${process.env.BASE_URL}instagram/webhook`, verifyToken: this.VERIFY_TOKEN ? 'set' : 'not set' });
   }
 }
