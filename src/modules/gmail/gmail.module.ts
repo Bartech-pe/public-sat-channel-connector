@@ -8,6 +8,7 @@ import { GmailAttachmentService } from './gmaill-attachment.service';
 import { GmailWebhookController } from './controller/gmail-webhook.controller';
 import { GmailGateway } from './gateway/gmail-gateway';
 import { GmailActionService } from './gmail-actions.service';
+import { RedisService } from './redis/redis.service';
 @Module({
   imports: [],
   exports: [],
@@ -19,6 +20,7 @@ import { GmailActionService } from './gmail-actions.service';
   providers: [
     AuthGmailService,
     GmailGateway,
+    RedisService,
     GmailService,
     GmailAttachmentService,
     GmailActionService,

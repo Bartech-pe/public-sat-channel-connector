@@ -27,8 +27,16 @@ export class GmailService {
     private readonly gmailActionService:GmailActionService,
     private readonly attachmnetService: GmailAttachmentService
   ) {}
-  private setToken(access_token: string, refresh_token: string) {
-    const oauth2Client = this.authService.GetAuthClient();
+
+  async onModuleInit() {
+    const restored = await this.authService.restoreOauthClient();
+    if (restored) {
+      this.gmail = google.gmail({ version: 'v1', auth: restored });
+      console.log('✅ Gmail client restaurado automáticamente desde Redis');
+    }
+  }
+  private async setToken(access_token: string, refresh_token: string) {
+    const oauth2Client = await this.authService.GetAuthClient();
     oauth2Client.setCredentials({
       access_token: access_token,
       refresh_token: refresh_token,
@@ -37,23 +45,21 @@ export class GmailService {
   }
   async RefreshSetToken(refreshToken: string) {
     const infoToken = await this.authService.RefrestToken(refreshToken);
-    this.setToken(infoToken.accessToken, infoToken.refreshToken)
+    await this.setToken(infoToken.accessToken, infoToken.refreshToken)
   }
   private historyNumber;
-  async onModuleInit() {
-  }
    
   async setWatch(body:Watchail){
       try {
       const emailFrom = await this.authService.RefrestToken(body.refreshToken)
-      this.setToken(emailFrom.accessToken, emailFrom.refreshToken)
+      await this.setToken(emailFrom.accessToken, emailFrom.refreshToken)
             const watchRequest = {
             userId: 'me',
             requestBody: {
                 labelIds: ['INBOX'],
                 topicName: `projects/${body.projectId}/topics/${body.topicName}`,
                 labelFilterAction: 'include',
-            },
+            },  
         };
         const response = await this.gmail.users.watch(watchRequest);
         console.log('watch', response.data)
@@ -64,11 +70,10 @@ export class GmailService {
         }
   }
   async handleGmailNotification(data: any): Promise<void> {
-    console.log('Gmail notification received:', data);
-    const { expiry_date, refresh_token } = this.authService.GetAuthClient().credentials;
+    const { expiry_date, refresh_token } = (await this.authService.GetAuthClient())?.credentials;
     if (this.authService.isExpired(expiry_date)) {
         const infoToken = await this.authService.RefrestToken(refresh_token) 
-        this.setToken(infoToken.accessToken,infoToken.refreshToken)
+        await this.setToken(infoToken.accessToken,infoToken.refreshToken)
     }
     const history = await this.gmail.users.history.list({
       userId: 'me',
@@ -141,7 +146,7 @@ export class GmailService {
     try {
       const refresh = options?.refreshToken ?? '';
       const emailFrom = await this.authService.RefrestToken(refresh);
-      this.setToken(emailFrom.accessToken, emailFrom.refreshToken);
+      await this.setToken(emailFrom.accessToken, emailFrom.refreshToken);
       const { query = '', maxResults = 10, pageToken } = options || {};
       const messagesResponse = await this.gmail.users.messages.list({
         userId: 'me',
@@ -176,7 +181,7 @@ export class GmailService {
   async SendEmail(body: BuildCenterEmail) {
     const raw = this.gmailActionService.BuildEmail(body);
     const emailFrom = await this.authService.RefrestToken(body.refreshToken);
-    this.setToken(emailFrom.accessToken, emailFrom.refreshToken);
+    await this.setToken(emailFrom.accessToken, emailFrom.refreshToken);
     const response = await this.gmail.users.messages.send({
       userId: 'me',
       requestBody: { raw },
