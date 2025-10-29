@@ -36,6 +36,7 @@
     "dotenv": "^17.2.2",
     "googleapis": "^159.0.0",
     "input": "^1.0.1",
+    "ioredis": "^5.8.2",
     "mysql2": "^3.14.1",
     "nest-winston": "^1.10.2",
     "passport": "^0.7.0",
