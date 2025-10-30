@@ -3,14 +3,14 @@ import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { cors: true });
   // app.enableCors({
   //   origin: 'http://localhost:4200',
   //   credentials: true,
   // });
   app.enableCors({
     origin: '*',
-    methods: 'GET,POST,PATCH,PUT,DELETE',
+    methods: 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
     credentials: true,
   });

@@ -50,46 +50,44 @@ import { RedisService } from './redis/redis.service';
         },
       );
     }
-    async setOauthClient(clientId:string,clientSecret:string,){
-      const url = this.configService.get<string>('REDIRECT_URL')
-      const redirect = `${url}v1/mail-configuration/createCredential`;
-      this.oauth2Client = new google.auth.OAuth2(
-        clientId,
-        clientSecret,
-        redirect
-      );
-      await this.redisService.set('gmail:client_config', {
-         clientId,
-        clientSecret,
-        redirect,
-    });
+    async setOauthClient(clientId: string, clientSecret: string) {
+      const redirect = `${this.configService.get<string>('REDIRECT_URL')}v1/mail-configuration/createCredential`;
+      // solo crea el cliente y guarda configuración, NO intercambia tokens
+      this.oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirect);
+      await this.redisService.set('gmail:client_config', { clientId, clientSecret, redirect });
+      this.logger.log('OAuth client configurado y guardado en Redis');
     }
 
-     async restoreOauthClient() {
+    async restoreOauthClient() {
+      if (this.oauth2Client) return this.oauth2Client;
+
       const config = await this.redisService.get('gmail:client_config');
-      const creds = await this.redisService.get('gmail:credentials');
-      if (!config) return null;
+      if (!config) {
+        this.logger.warn('No hay config OAuth en Redis');
+        return null;
+      }
 
-      this.oauth2Client = new google.auth.OAuth2(
-        config.clientId,
-        config.clientSecret,
-        config.redirect,
-      );
+      this.oauth2Client = new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirect);
 
+      const creds = await this.redisService.get('gmail:credentials'); // { refresh_token, access_token, expiry_date }
       if (creds) {
         this.oauth2Client.setCredentials(creds);
-        this.logger.log('🔄 Cliente OAuth2 restaurado desde Redis');
+        this.logger.log('🔄 Cliente OAuth restaurado desde Redis con credenciales');
+      } else {
+        this.logger.log('Cliente OAuth restaurado sin credenciales (esperando refresh token)');
       }
 
       return this.oauth2Client;
     }
 
     async GetAuthClient() {
-      if(!this.oauth2Client){
-        await this.restoreOauthClient()
+      if (!this.oauth2Client) {
+        await this.restoreOauthClient();
       }
       return this.oauth2Client;
     }
+
+    
     async setCode(code: string) {
       return this.client.get('v1/mail-configuration/createCredential', {
         params: { code },
@@ -120,27 +118,45 @@ import { RedisService } from './redis/redis.service';
       }
     }
     async RefrestToken(refreshToken: string) {
-      this.oauth2Client.setCredentials({ refresh_token: refreshToken });
-      const tokenInfo = await this.oauth2Client.getAccessToken();
-
-      if (!tokenInfo.token) {
-        throw new InternalServerErrorException('Invalid token');
+      if (!refreshToken) {
+        throw new InternalServerErrorException('No hay refresh token disponible');
       }
 
-      const credentials = {
-        refresh_token: refreshToken,
-        access_token: tokenInfo.token,  
-        expiry_date: Date.now() + 3500 * 1000, // aprox 1 hora
-      };
+      const oauth2Client = await this.GetAuthClient();
+      if (!oauth2Client) throw new InternalServerErrorException('OAuth client no configurado');
 
-      // 👇 guardamos tokens en Redis
-      await this.redisService.set('gmail:credentials', credentials);
+      const lockKey = 'lock:gmail:refresh';
+      const lock = await this.redisService.acquireLock(lockKey, 5000); 
+      try {
+        oauth2Client.setCredentials({ refresh_token: refreshToken });
+        try {
+          const tokenInfo = await oauth2Client.getAccessToken(); 
+          if (!tokenInfo?.token) throw new Error('No se obtuvo access token');
 
-      return {
-        accessToken: tokenInfo.token,
-        refreshToken: refreshToken,
-        authenticated: true,
-      };
+          const credentials = {
+            refresh_token: refreshToken,
+            access_token: tokenInfo.token,
+            expiry_date: Date.now() + 3500 * 1000,
+          };
+          await this.redisService.set('gmail:credentials', credentials);
+
+          return {
+            accessToken: tokenInfo.token,
+            refreshToken,
+            authenticated: true,
+          };
+        } catch (err) {
+          const msg = (err?.response?.data || err?.message || '').toString();
+          if (msg.includes('invalid_grant') || msg.includes('Token has been expired or revoked')) {
+            this.logger.error('Refresh token revocado/expirado (invalid_grant)');
+            await this.redisService.set('gmail:credentials:invalid', true);
+            throw new UnauthorizedException('refresh_token_revoked');
+          }
+          throw err;
+        }
+      } finally {
+        if (lock) await this.redisService.releaseLock(lockKey, lock);
+      }
     }
 
     isExpired(expiryDate?: number): boolean {

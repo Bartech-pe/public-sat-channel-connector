@@ -19,6 +19,14 @@ export class ChatsatController {
 		return await this.chathubService.checkForAvailableAdvisors();
 	}
 
+	@Post('get-automatic-messages')
+	@HttpCode(HttpStatus.OK)
+	async getAutomaticMessages(
+		@Headers('authorization') authHeader: string
+	) {
+		return await this.chathubService.getAutomaticMessages(authHeader);
+	}
+
 	@Post('create-citizen')
 	@HttpCode(HttpStatus.OK)
 	async createCitizenInCrm(@Body() payload: CreateChannelCitizenDto) {
@@ -57,7 +65,5 @@ export class ChatsatController {
 			token: authHeader,
 		});
 	}
-
-
 
 }

@@ -22,48 +22,58 @@ export class ChatHubService {
     });
   }
 
-  private handleErrorFromCRM(error: any)
-  {
+  private handleErrorFromCRM(error: any): HttpException {
     if (error.response) {
-        const status = error.response.status;
-        const data = error.response.data;
-        throw new HttpException(data, status);
+      const status = error.response.status;
+      const data = error.response.data;
+      return new HttpException(data, status);
     }
-    throw new HttpException('Error al comunicarse con el CRM', 500);
+    return new HttpException('Error al comunicarse con el CRM', 500);
   }
 
-  async invalidateCredentials(payload: InvalidateInboxCredentialDto){
+  async invalidateCredentials(payload: InvalidateInboxCredentialDto) {
     try {
-      await this.client.post("v1/inboxs/credentials/invalidate",payload)
-      
+      await this.client.post("v1/inboxs/credentials/invalidate", payload);
     } catch (error) {
       this.logger.error(`❌ No se pudo encontrar un registro en la aplicacion externa`);
-      
+      this.logger.error(error);
     }
   }
 
   async checkForAvailableAdvisors(): Promise<{ availableAdvisors: number }> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const crmResponse = await this.client.get("v1/channel-room/check-available-advisors")
-        resolve(crmResponse.data);
-      } catch (error) {	
-        this.handleErrorFromCRM(error)
-      }
-    });
+    try {
+      const crmResponse = await this.client.get("v1/channel-room/check-available-advisors");
+      return crmResponse.data;
+    } catch (error) {
+      this.logger.error('Error checking available advisors:', error);
+      throw this.handleErrorFromCRM(error);
+    }
+  }
+
+  async getAutomaticMessages(authHeader: string): Promise<string[]> {
+    try {
+      const crmResponse = await this.client.get(`v1/automatic-messages/descriptions-by-channel/${3}`, {
+        headers: {
+          Authorization: authHeader,
+        },
+      });
+      return crmResponse.data;
+    } catch (error) {
+      this.logger.error('Error getting automatic messages:', error);
+      throw this.handleErrorFromCRM(error);
+    }
   }
 
   async createCitizenInCrm(payload: CreateChannelCitizenDto): Promise<any> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const crmResponse = await this.client.post("v1/channel-citizen", payload)
-        resolve(crmResponse.data);
-      } catch (error) {	
-        this.handleErrorFromCRM(error)
-      }
-    });
+    try {
+      this.logger.debug("entra");
+      const crmResponse = await this.client.post("v1/channel-citizen", payload);
+      return crmResponse.data;
+    } catch (error) {
+      this.logger.error('Error creating citizen in CRM:', error);
+      throw this.handleErrorFromCRM(error);
+    }
   }
-
 
   async sendMessagesHtmlFromChannelAttentionForChatsat(attentionId: number, authHeader: string): Promise<any> {
     try {
@@ -78,25 +88,25 @@ export class ChatHubService {
       );
       return crmResponse.data;
     } catch (error) {
-      this.handleErrorFromCRM(error)
+      this.logger.error('Error sending messages HTML:', error);
+      throw this.handleErrorFromCRM(error);
     }
   }
 
-
   async SurveyCreate(payload: CreateSurveyDto, authHeader: string): Promise<any> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const crmResponse = await this.client.post("v1/channel-citizen/create-survey", payload,
-          {
-            headers: {
-              Authorization: authHeader, 
-            },
-          }
-        )
-        resolve(crmResponse.data);
-      } catch (error) {	
-        this.handleErrorFromCRM(error)
-      }
-    });
+    try {
+      const crmResponse = await this.client.post("v1/channel-citizen/create-survey", payload, {
+        headers: {
+          Authorization: authHeader,
+        },
+      });
+      this.logger.debug(payload);
+      this.logger.debug(authHeader);
+      this.logger.debug(crmResponse);
+      return crmResponse.data;
+    } catch (error) {
+      this.logger.error('Error creating survey:', error);
+      throw this.handleErrorFromCRM(error);
+    }
   }
 }

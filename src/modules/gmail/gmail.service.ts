@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable no-unsafe-optional-chaining */
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { gmail_v1, google } from 'googleapis';
 import { AuthGmailService } from './auth-gmail.service';
 import { BuildCenterEmail, Watchail } from './dto/BuildEmail';
@@ -20,6 +20,7 @@ import { GmailAttachmentService } from './gmaill-attachment.service';
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 @Injectable()
 export class GmailService {
+  private readonly logger = new Logger(GmailService.name);
   private gmail: gmail_v1.Gmail;
   constructor(
     private readonly authService: AuthGmailService,
@@ -29,59 +30,77 @@ export class GmailService {
   ) {}
 
   async onModuleInit() {
-    const restored = await this.authService.restoreOauthClient();
-    if (restored) {
-      this.gmail = google.gmail({ version: 'v1', auth: restored });
+    const oauthClient = await this.authService.restoreOauthClient();
+    if (oauthClient) {
+      this.gmail = google.gmail({ version: 'v1', auth: oauthClient });
       console.log('✅ Gmail client restaurado automáticamente desde Redis');
+    } else {
+      console.log('⚠️ Gmail client no restaurado: configuración faltante');
     }
   }
+
   private async setToken(access_token: string, refresh_token: string) {
     const oauth2Client = await this.authService.GetAuthClient();
+    if (!oauth2Client) throw new Error('OAuth client no disponible');
     oauth2Client.setCredentials({
-      access_token: access_token,
-      refresh_token: refresh_token,
+      access_token,
+      refresh_token,
     });
     this.gmail = google.gmail({ version: 'v1', auth: oauth2Client });
   }
+
   async RefreshSetToken(refreshToken: string) {
     const infoToken = await this.authService.RefrestToken(refreshToken);
     await this.setToken(infoToken.accessToken, infoToken.refreshToken)
   }
   private historyNumber;
    
-  async setWatch(body:Watchail){
-      try {
-      const emailFrom = await this.authService.RefrestToken(body.refreshToken)
-      await this.setToken(emailFrom.accessToken, emailFrom.refreshToken)
-            const watchRequest = {
-            userId: 'me',
-            requestBody: {
-                labelIds: ['INBOX'],
-                topicName: `projects/${body.projectId}/topics/${body.topicName}`,
-                labelFilterAction: 'include',
-            },  
-        };
-        const response = await this.gmail.users.watch(watchRequest);
-        console.log('watch', response.data)
-        this.historyNumber = response.data.historyId;
-        return response.data
-        } catch (error) {
-            console.error('Error en StarWatch', error)
-        }
-  }
-  async handleGmailNotification(data: any): Promise<void> {
-    const { expiry_date, refresh_token } = (await this.authService.GetAuthClient())?.credentials;
-    if (this.authService.isExpired(expiry_date)) {
-        const infoToken = await this.authService.RefrestToken(refresh_token) 
-        await this.setToken(infoToken.accessToken,infoToken.refreshToken)
+  async setWatch(body: Watchail) {
+    try {
+      const infoToken = await this.authService.RefrestToken(body.refreshToken);
+      await this.setToken(infoToken.accessToken, infoToken.refreshToken);
+
+      const response = await this.gmail.users.watch({
+        userId: 'me',
+        requestBody: {
+          labelIds: ['INBOX'],
+          topicName: `projects/${body.projectId}/topics/${body.topicName}`,
+          labelFilterAction: 'include',
+        },
+      });
+      console.log('watch', response.data);
+      this.historyNumber = response.data.historyId;
+      return response.data;
+    } catch (err) {
+      if (err?.message === 'refresh_token_revoked' || err?.response?.data?.error === 'invalid_grant') {
+        console.error('Refresh token inválido. Notificando al CRM para reautorización.');
+        await this.notifyCrmRefreshNeeded();
+        throw new InternalServerErrorException('Refresh token inválido, se requiere reautenticación.');
+      }
+      console.error('Error en StarWatch', err);
+      throw err;
     }
-    const history = await this.gmail.users.history.list({
-      userId: 'me',
-      startHistoryId: this.historyNumber,
-      historyTypes: ['messageAdded'],
-    });
-    console.log('Hisotry:', history.data.history);
-    for (const record of history.data.history || []) {
+  }
+
+  private async notifyCrmRefreshNeeded() {
+    this.logger.debug("Token is dead")
+  }
+  
+async handleGmailNotification(data: any): Promise<void> {
+    try {
+      const oauthCli = await this.authService.GetAuthClient();
+      const { expiry_date, refresh_token } = oauthCli?.credentials || {};
+      if (this.authService.isExpired(expiry_date)) {
+        // usar el refresh token guardado en Redis/CRM para renovar
+        const infoToken = await this.authService.RefrestToken(refresh_token);
+        await this.setToken(infoToken.accessToken, infoToken.refreshToken);
+      }
+      const history = await this.gmail.users.history.list({
+        userId: 'me',
+        startHistoryId: this.historyNumber,
+        historyTypes: ['messageAdded'],
+      });
+      for (const record of history.data.history || []) {
       if (Array.isArray(record.messagesAdded)) {
         for (const added of record.messagesAdded) {
           const message = added.message;
@@ -92,7 +111,16 @@ export class GmailService {
         }
       }
     }
+    } catch (err) {
+      if (err?.message === 'refresh_token_revoked' || (err?.response?.data && err.response.data.error === 'invalid_grant')) {
+        // no intentar refrescar mas, notificar CRM
+        await this.notifyCrmRefreshNeeded();
+        return;
+      }
+      throw err;
+    }
   }
+  
   async forwardTo(body:ForwardTo) {
     const {messageId,forwardTo,message}=body;
     const original = await this.gmail.users.messages.get({
