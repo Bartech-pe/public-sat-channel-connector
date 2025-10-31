@@ -11,6 +11,7 @@ export class GmailAttachmentController {
     return await this.attachmnetService.GetFile(
       body.messageId,
       body.attachmentId,
+      body.clientId,
     );
   }
   @Post('see')
@@ -18,6 +19,7 @@ export class GmailAttachmentController {
     const buffer = await this.attachmnetService.GetFile(
       body.messageId,
       body.attachmentId,
+      body.clientId,
     );
     res.setHeader('Content-Type', body.mimeType);
     res.setHeader(

@@ -2,12 +2,15 @@ import { IsString } from 'class-validator';
 
 export class ReplyEmail {
   @IsString()
+  clientId: string;
+  @IsString()
   messageId: string;
   @IsString()
   content: string;
   @IsString()
   threadId: string;
 }
+
 export class ReplyBody {
   from: string;
   subject: string;

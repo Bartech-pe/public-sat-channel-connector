@@ -2,9 +2,6 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
-import { TelegramModule } from './modules/telegram/telegram.module';
-import { DatabaseModule } from './database/database.module';
-import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ChatHubModule } from './modules/chat-hub/chat-hub.module';
 import { WhatsappOfficialModule } from './modules/whatsapp-official/whatsapp-official.module';
 import { InstagramModule } from './modules/instagram/instagram.module';
@@ -15,7 +12,6 @@ import { GmailModule } from './modules/gmail/gmail.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
-    // DatabaseModule,
     ChatHubModule,
     WhatsappOfficialModule,
     InstagramModule,

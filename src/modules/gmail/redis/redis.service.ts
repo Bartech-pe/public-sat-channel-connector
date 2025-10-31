@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Redis } from 'ioredis';
+import { redisConfig } from 'config/env';
+import Redis from 'ioredis';
 
 @Injectable()
 export class RedisService {
@@ -8,8 +9,8 @@ export class RedisService {
 
   constructor() {
     this.client = new Redis({
-      host: process.env.REDIS_HOST || '127.0.0.1',
-      port: Number(process.env.REDIS_PORT) || 6379,
+      host: redisConfig.host,
+      port: redisConfig.port,
     });
   }
 
@@ -61,7 +62,7 @@ export class RedisService {
     }
 
     this.logger.error(
-      `❌ No se pudo adquirir lock en ${key} después de ${maxRetries} intentos`,
+      `No se pudo adquirir lock en ${key} después de ${maxRetries} intentos`,
     );
     return null;
   }
@@ -79,7 +80,9 @@ export class RedisService {
       this.logger.debug(`🔓 Lock liberado en ${key}`);
       return true;
     } else {
-      this.logger.warn(`⚠️ No se pudo liberar lock en ${key} (token no coincide)`);
+      this.logger.warn(
+        `⚠️ No se pudo liberar lock en ${key} (token no coincide)`,
+      );
       return false;
     }
   }

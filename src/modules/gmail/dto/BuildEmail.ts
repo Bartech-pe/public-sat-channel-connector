@@ -1,5 +1,18 @@
 import { IsArray, IsOptional, IsString } from 'class-validator';
 
+export class MailClient {
+  @IsString()
+  clientId: string;
+  @IsString()
+  clientSecret: string;
+  @IsString()
+  redirectUri: string;
+  @IsString()
+  email: string;
+  @IsString()
+  state: string;
+}
+
 export class BuildEmail {
   @IsString()
   from: string;
@@ -23,15 +36,21 @@ export class BuildEmail {
   @IsArray()
   attachments?: FileEmail[];
 }
+
 export class FileEmail {
   filename: string;
   content: Buffer | string;
   mimeType: string;
 }
+
 export class BuildCenterEmail extends BuildEmail {
   refreshToken: string;
+  clientId: string;
 }
-export class Watchail {
+
+export class WatchMail {
+  @IsString()
+  clientId: string;
   @IsString()
   refreshToken: string;
   @IsString()

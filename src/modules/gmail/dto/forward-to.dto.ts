@@ -1,5 +1,8 @@
 import { IsString } from 'class-validator';
+
 export class ForwardTo {
+  @IsString()
+  clientId: string;
   @IsString()
   messageId: string;
   @IsString()
@@ -7,6 +10,7 @@ export class ForwardTo {
   @IsString()
   message: string;
 }
+
 export class ForwardBody {
   from: string;
   subject: string;

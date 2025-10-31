@@ -1,7 +1,19 @@
-import { Controller, Get, Post, Query, Param, Res, UseGuards, Logger, BadRequestException, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  Res,
+  UseGuards,
+  Logger,
+  BadRequestException,
+  Req,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { InstagramService } from './instagram.service';
 import { Response, Request } from 'express';
+import { envConfig } from 'config/env';
 
 @Controller('auth/instagram')
 export class InstagramController {
@@ -20,11 +32,13 @@ export class InstagramController {
     try {
       const longToken = await this.svc.extendUserToken(user.accessToken);
       const { pages, subscriptions } = await this.svc.setupAfterAuth(longToken);
-      const redirectUrl = `${process.env.FRONTEND_URL}/auth/success?access_token=${longToken}&pages=${pages.length}`;
+      const redirectUrl = `${envConfig.crmApiUrl}/auth/success?access_token=${longToken}&pages=${pages.length}`;
       res.redirect(redirectUrl);
     } catch (err) {
       this.logger.error(err.message);
-      res.redirect(`${process.env.FRONTEND_URL}/auth/error?msg=${encodeURIComponent(err.message)}`);
+      res.redirect(
+        `${envConfig.crmApiUrl}/auth/error?msg=${encodeURIComponent(err.message)}`,
+      );
     }
   }
   @Get('pages')
@@ -44,7 +58,7 @@ export class InstagramController {
   async subscribePage(
     @Param('pageId') pageId: string,
     @Query('access_token') token: string,
-    @Res() res: Response
+    @Res() res: Response,
   ) {
     if (!token) throw new BadRequestException('access_token required');
     const data = await this.svc.subscribePageWebhook(pageId, token);
@@ -61,7 +75,7 @@ export class InstagramController {
   async webhookPageStatus(
     @Param('pageId') pageId: string,
     @Query('access_token') token: string,
-    @Res() res: Response
+    @Res() res: Response,
   ) {
     if (!token) throw new BadRequestException('access_token required');
     const data = await this.svc.checkPageWebhook(pageId, token);

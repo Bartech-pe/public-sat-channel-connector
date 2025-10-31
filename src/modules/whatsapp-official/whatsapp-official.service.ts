@@ -84,7 +84,7 @@ export class WhatsappOfficialService {
         
         return response;
       } catch (error) {
-        this.logger.error(`❌ Error enviando mensaje: ${JSON.stringify(error)}`);
+        this.logger.error(`Error enviando mensaje: ${JSON.stringify(error)}`);
       }
   }
 
@@ -114,7 +114,7 @@ export class WhatsappOfficialService {
       );
       return response;
     } catch (error) {
-      this.logger.error(`❌ Error del cliente : ${JSON.stringify(error)}`);
+      this.logger.error(`Error del cliente : ${JSON.stringify(error)}`);
     }
   }
 

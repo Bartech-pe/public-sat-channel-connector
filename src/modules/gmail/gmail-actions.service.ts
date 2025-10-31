@@ -10,6 +10,7 @@ import {
   EmailSent,
   EmailSentContent,
 } from './dto/EmailSent.dto';
+import { getHeader } from 'src/common/helpers/mail.helper';
 
 @Injectable()
 export class GmailActionService {
@@ -172,22 +173,24 @@ export class GmailActionService {
     });
     const message = response.data;
     const headers = message.payload?.headers || [];
-    const getHeader = (name: string) =>
-      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())
-        ?.value || null;
-    const subject = getHeader('Subject');
-    const from = getHeader('From');
-    const to = getHeader('To');
-    const referencesMail = getHeader('Message-ID');
-    const references = getHeader('References');
-    const reply = getHeader('In-Reply-To');
-    const forward = getHeader('X-Forwarded-From-Thread');
-    let content: EmailSentContent[] = [];
-    let files: AttachmentContent[] = [];
-    if (message.payload) {
-      content = this.getGmailContentPart(message.payload).content;
-      files = this.getGmailContentPart(message.payload).files;
-    }
+
+    const subject = getHeader(headers, 'Subject');
+    const from = getHeader(headers, 'From');
+    const to = getHeader(headers, 'To');
+    const referencesMail = getHeader(headers, 'Message-ID');
+    const references = getHeader(headers, 'References');
+    const reply = getHeader(headers, 'In-Reply-To');
+    const forward = getHeader(headers, 'X-Forwarded-From-Thread');
+
+    const { content } = this.extractHtmlBody(message.payload);
+    let attachments = await this.extractAttachmentsBase64(
+      gmail,
+      message.payload,
+    );
+
+    console.log('content', content);
+    console.log('attachments', attachments);
+
     const email: EmailSent = {
       messageId: message.id ?? '',
       referencesMail: referencesMail ?? '',
@@ -199,10 +202,11 @@ export class GmailActionService {
       inReplyTo: reply,
       content: content,
       forward: forward,
-      attachment: files,
+      attachments: attachments,
     };
     return email;
   }
+
   private GetParts(part: gmail_v1.Schema$MessagePart) {
     if (part.body?.data) {
       const content = Buffer.from(part.body.data, 'base64url').toString(
@@ -214,14 +218,21 @@ export class GmailActionService {
       };
       return bodyContent;
     } else if (part.body?.attachmentId) {
+      const headers = part?.headers || [];
+
+      const contentID = getHeader(headers, 'Content-ID');
+
       const bodyContent: AttachmentContent = {
-        mimeType: part.mimeType ?? '',
         attachmentId: part.body?.attachmentId,
-        filename: part.filename ?? '',
+        cid: contentID.match(/<(.*?)>/)[1],
+        filename: part!.filename!,
+        mimeType: part!.mimeType!,
+        size: part.body.size!,
       };
       return bodyContent;
     }
   }
+
   isEmailSentContent(content: any): content is EmailSentContent {
     return (content as EmailSentContent).content !== undefined;
   }
@@ -270,5 +281,89 @@ export class GmailActionService {
       content.push(bodyContent);
     }
     return { content, files };
+  }
+
+  /**
+   * Busca recursivamente el cuerpo HTML de un mensaje.
+   */
+  private extractHtmlBody(payload: gmail_v1.Schema$MessagePart | undefined): {
+    content: string;
+  } {
+    let content = '';
+
+    const parts = this.getAllParts(payload);
+
+    const htmlParts = parts.filter((p) => p.mimeType.includes('text/html'));
+
+    // Helper para decodificar base64url
+    const decode = (data: string): string => {
+      try {
+        const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+        return Buffer.from(normalized, 'base64').toString('utf8');
+      } catch (e) {
+        console.error('Error decoding body', e);
+        return '';
+      }
+    };
+
+    // Caso 1: este mismo part es HTML
+    if (htmlParts[0]) {
+      const part = htmlParts[0];
+      content = decode(part.body.data);
+    }
+
+    return { content };
+  }
+
+  /**
+   * Extrae adjuntos y los devuelve en base64 (sin guardarlos)
+   */
+  private async extractAttachmentsBase64(gmail, messageData) {
+    const attachments: AttachmentContent[] = [];
+    const parts = this.getAllParts(messageData.payload);
+
+    for (const part of parts) {
+      if (part.filename && part.body?.attachmentId) {
+        const attach = await gmail.users.messages.attachments.get({
+          userId: 'me',
+          messageId: messageData.id,
+          id: part.body.attachmentId,
+        });
+
+        const data = attach.data.data;
+        if (!data) continue;
+
+        const headers = part?.headers || [];
+
+        const contentID = getHeader(headers, 'Content-ID');
+
+        attachments.push({
+          attachmentId: part.body?.attachmentId,
+          cid: contentID.match(/<(.*?)>/)[1],
+          filename: part.filename,
+          mimeType: part.mimeType,
+          size: part.body.size,
+          content: data, // Base64 directo
+        });
+      }
+    }
+
+    return attachments;
+  }
+
+  /**
+   * Recolecta recursivamente todas las partes MIME
+   */
+  private getAllParts(payload): any[] {
+    const parts: any[] = [];
+    if (!payload) return parts;
+
+    if (payload.parts) {
+      for (const part of payload.parts) {
+        parts.push(part);
+        parts.push(...this.getAllParts(part));
+      }
+    }
+    return parts;
   }
 }

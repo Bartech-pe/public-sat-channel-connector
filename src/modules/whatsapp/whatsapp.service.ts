@@ -165,7 +165,7 @@ export class WhatsappService {
       this.whatsappGateway.broadcastMessage(incomingMessage);
 
     } catch (error) {
-      this.logger.error(`❌ Error procesando mensaje de WhatsApp: ${error.message}`);
+      this.logger.error(`Error procesando mensaje de WhatsApp: ${error.message}`);
     }
     });
   }

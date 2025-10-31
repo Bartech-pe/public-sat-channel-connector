@@ -27,7 +27,7 @@ export class ChatsatGateway {
       client.emit('error', { message: 'No autorizado: falta token' });
 
       client.disconnect(true);
-      this.logger.error("❌ Cliente desconectado por falta de autorización.");
+      this.logger.error("Cliente desconectado por falta de autorización.");
       return;
     }
     this.logger.log(`La conexión con el cliente ${client.id} se ha establecido correctamente.`, )

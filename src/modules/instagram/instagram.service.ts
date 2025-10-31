@@ -1,6 +1,5 @@
 // instagram.service.ts
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import {
   FacebookPage,
@@ -12,6 +11,7 @@ import {
   IncomingMessage,
   WebhookEvent,
 } from './interfaces/instagram.interface';
+import { channelConfig, envConfig } from 'config/env';
 
 @Injectable()
 export class InstagramService {
@@ -22,11 +22,11 @@ export class InstagramService {
   private readonly webhookVerifyToken: string;
   private readonly baseUrl: string;
 
-  constructor(private cfg: ConfigService) {
-    this.appId = this.cfg.get<string>('FACEBOOK_APP_ID')!;
-    this.appSecret = this.cfg.get<string>('FACEBOOK_APP_SECRET')!;
-    this.webhookVerifyToken = this.cfg.get<string>('INSTAGRAM_VERIFY_TOKEN')!;
-    this.baseUrl = this.cfg.get<string>('BASE_URL')!;
+  constructor() {
+    this.appId = channelConfig.fbAppId;
+    this.appSecret = channelConfig.fbAppSecret;
+    this.webhookVerifyToken = channelConfig.igVerifyToken;
+    this.baseUrl = envConfig.baseUrl;
   }
 
   /** Exchange a short-lived token for a long-lived (~60 days) user token */
@@ -41,7 +41,7 @@ export class InstagramService {
             client_secret: this.appSecret,
             fb_exchange_token: shortToken,
           },
-        }
+        },
       );
       return res.data.access_token;
     } catch (err: any) {
@@ -61,7 +61,7 @@ export class InstagramService {
             fields:
               'access_token,name,id,instagram_business_account{id,username}',
           },
-        }
+        },
       );
       return (data.data || []).filter((p) => p.instagram_business_account);
     } catch (err: any) {
@@ -78,7 +78,7 @@ export class InstagramService {
         `https://graph.facebook.com/${this.apiVersion}/${this.appId}/subscriptions`,
         {
           object: 'page',
-          callback_url: `${this.baseUrl}instagram/webhook`,
+          callback_url: `${this.baseUrl}/instagram/webhook`,
           verify_token: this.webhookVerifyToken,
           fields: [
             'messages',
@@ -89,7 +89,7 @@ export class InstagramService {
             'messaging_referrals',
           ],
         },
-        { params: { access_token: `${this.appId}|${this.appSecret}` } }
+        { params: { access_token: `${this.appId}|${this.appSecret}` } },
       );
 
       // Subscribe to Instagram events
@@ -97,11 +97,11 @@ export class InstagramService {
         `https://graph.facebook.com/${this.apiVersion}/${this.appId}/subscriptions`,
         {
           object: 'instagram',
-          callback_url: `${this.baseUrl}instagram/webhook`,
+          callback_url: `${this.baseUrl}/instagram/webhook`,
           verify_token: this.webhookVerifyToken,
           fields: ['messages', 'message_reactions'],
         },
-        { params: { access_token: `${this.appId}|${this.appSecret}` } }
+        { params: { access_token: `${this.appId}|${this.appSecret}` } },
       );
 
       return pageSub.data;
@@ -123,10 +123,7 @@ export class InstagramService {
     for (const p of pages) {
       try {
         // Subscribe page
-        const pageSub = await this.subscribePageWebhook(
-          p.id,
-          p.access_token
-        );
+        const pageSub = await this.subscribePageWebhook(p.id, p.access_token);
         subscriptions.push(pageSub);
         this.logger.log(`Proveedor suscribe página cliente ${p.name}`);
 
@@ -140,15 +137,15 @@ export class InstagramService {
               access_token: p.access_token,
               subscribed_fields: ['messages', 'message_reactions'].join(','),
             },
-          }
+          },
         );
         this.logger.log(
-          `Proveedor suscribió IG Business ${p.instagram_business_account!.username}`
+          `Proveedor suscribió IG Business ${p.instagram_business_account!.username}`,
         );
       } catch (err: any) {
         this.logger.error(
           `Failed page subscription ${p.name}`,
-          this.extractErr(err)
+          this.extractErr(err),
         );
       }
     }
@@ -159,7 +156,7 @@ export class InstagramService {
   /** Subscribe a single Facebook Page to the webhook */
   async subscribePageWebhook(
     pageId: string,
-    pageAccessToken: string
+    pageAccessToken: string,
   ): Promise<PageSubscription> {
     try {
       const res = await axios.post<PageSubscription>(
@@ -178,16 +175,13 @@ export class InstagramService {
               'standby',
             ].join(','),
           },
-        }
+        },
       );
       return res.data;
     } catch (err: any) {
-      this.logger.error(
-        'subscribePageWebhook error',
-        this.extractErr(err)
-      );
+      this.logger.error('subscribePageWebhook error', this.extractErr(err));
       throw new BadRequestException(
-        `Failed to subscribe page webhook: ${this.extractErr(err)}`
+        `Failed to subscribe page webhook: ${this.extractErr(err)}`,
       );
     }
   }
@@ -201,7 +195,7 @@ export class InstagramService {
           params: {
             access_token: `${this.appId}|${this.appSecret}`,
           },
-        }
+        },
       );
       return res.data;
     } catch (err: any) {
@@ -213,12 +207,12 @@ export class InstagramService {
   /** Check page‑level subscription status */
   async checkPageWebhook(
     pageId: string,
-    pageAccessToken: string
+    pageAccessToken: string,
   ): Promise<WebhookStatus> {
     try {
       const res = await axios.get<FacebookApiResponse>(
         `https://graph.facebook.com/${this.apiVersion}/${pageId}/subscribed_apps`,
-        { params: { access_token: pageAccessToken } }
+        { params: { access_token: pageAccessToken } },
       );
       return { success: true, data: res.data.data || [] };
     } catch (err: any) {
@@ -230,7 +224,7 @@ export class InstagramService {
   /** Debug all webhook setups */
   async debugWebhook(accessToken: string): Promise<DebugInfo> {
     const appWebhook = await this.checkAppWebhook();
-    const pages     = await this.getUserPages(accessToken);
+    const pages = await this.getUserPages(accessToken);
     const info: PageDebugInfo[] = [];
 
     for (const p of pages) {
@@ -266,8 +260,9 @@ export class InstagramService {
   /** Process a single incoming message from webhook */
   public async processIncomingMessage(m: IncomingMessage): Promise<void> {
     this.logger.log(
-      `Proveedor recibió mensaje del cliente ${m.sender.id}: ${m.message?.text ||
-        '[media]'}`
+      `Proveedor recibió mensaje del cliente ${m.sender.id}: ${
+        m.message?.text || '[media]'
+      }`,
     );
   }
 

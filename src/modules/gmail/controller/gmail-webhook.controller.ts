@@ -9,14 +9,14 @@ import { GmailService } from '../gmail.service';
 export class GmailWebhookController {
   constructor(private readonly gmailService: GmailService) {}
   @Post()
-  async handlePubSub(@Body() body: any, @Req() req: any) {
-    try {
-      const message = body?.message;
-      const data = Buffer.from(message.data, 'base64').toString();
-      const payload = JSON.parse(data);
-      await this.gmailService.handleGmailNotification(payload);
-    } catch (error) {
-      console.error('Error procesando notificación Pub/Sub:', error);
-    }
+  async handlePubSub(@Body() body: any) {
+    console.log('Mensaje recibido de Gmail Pub/Sub', body);
+    const message = body?.message;
+    if (!message?.data) return;
+
+    const decoded = Buffer.from(message.data, 'base64').toString();
+    const payload = JSON.parse(decoded);
+
+    await this.gmailService.handleGmailNotification(payload);
   }
 }

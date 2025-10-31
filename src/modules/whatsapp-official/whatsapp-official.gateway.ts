@@ -58,7 +58,7 @@ export class WhatsappOfficialGateway implements OnGatewayConnection, OnGatewayDi
         //   payload.message,
         // );
       } catch (error) {
-        console.error(`❌ Error enviando mensaje: ${error.message}`);
+        console.error(`Error enviando mensaje: ${error.message}`);
         client.emit('message.error', { error: error.message });
       }
     });

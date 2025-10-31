@@ -17,12 +17,12 @@ export class GmailGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
-    this.logger.log(`Cliente Desconectado a la sesión: ${client.id}`);
+    this.logger.warn(`Cliente Desconectado a la sesión: ${client.id}`);
   }
 
   @WebSocketServer()
   server: Server;
-  emitProductUpdated(email: EmailSent) {
+  emitMailUpdated(email: EmailSent) {
     this.server.emit('email.sent', email);
   }
 }
