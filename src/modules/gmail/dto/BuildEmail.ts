@@ -47,11 +47,15 @@ export class BuildCenterEmail extends BuildEmail {
   refreshToken: string;
   name?: string;
   clientId: string;
+  email: string;
+  userId?: number;
 }
 
 export class WatchMail {
   @IsString()
   clientId: string;
+  @IsString()
+  email: string;
   @IsString()
   refreshToken: string;
   @IsString()

@@ -29,9 +29,11 @@ export class GmailController {
   }
 
   @Post('exchangeCode')
-  async GetCode(@Body() body: { code: string; clientId: string }) {
-    const { clientId, code } = body;
-    return await this.authService.exchangeCodeForTokens(code, clientId);
+  async GetCode(
+    @Body() body: { code: string; clientId: string; email: string },
+  ) {
+    const { clientId, code, email } = body;
+    return await this.authService.exchangeCodeForTokens(code, clientId, email);
   }
 
   @Post('sendemail')
@@ -49,6 +51,7 @@ export class GmailController {
       accessToken: string;
       refreshToken: string;
       clientId: string;
+      email: string;
     },
   ) {
     return await this.emailService.getMessages(options);
@@ -60,8 +63,8 @@ export class GmailController {
   // }
 
   @Post('replyemail')
-  async ReplyEmail(@Body() body: ReplyEmail) {
-    return await this.emailService.ReplyEmail(body);
+  async replyEmail(@Body() body: ReplyEmail) {
+    return await this.emailService.replyEmail(body);
   }
 
   @Post('forwardto')

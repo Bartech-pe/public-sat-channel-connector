@@ -45,6 +45,8 @@ export class AuthGmailService {
         });
       },
     );
+
+    /* redisService.clearAll(); */
   }
 
   private createOAuthClient(
@@ -61,7 +63,7 @@ export class AuthGmailService {
     redirectUri: string,
     email: string,
   ) {
-    await this.redisService.set(`gmail:${clientId}:client_config`, {
+    await this.redisService.set(`gmail:${clientId}:${email}:client_config`, {
       clientId,
       clientSecret,
       redirectUri,
@@ -84,30 +86,34 @@ export class AuthGmailService {
 
   async setClientCredentials(
     clientId: string,
+    email: string,
     credentials: {
       refresh_token: string;
       access_token: string;
       expiry_date: number;
     },
   ) {
-    await this.redisService.set(`gmail:${clientId}:credentials`, credentials);
+    await this.redisService.set(
+      `gmail:${clientId}:${email}:credentials`,
+      credentials,
+    );
   }
 
-  getClientCredentials(clientId: string) {
+  getClientCredentials(clientId: string, email: string) {
     return this.redisService.get<{
       refresh_token: string;
       access_token: string;
       expiry_date: number;
-    }>(`gmail:${clientId}:credentials`);
+    }>(`gmail:${clientId}:${email}:credentials`);
   }
 
-  getClientConfig(clientId: string) {
+  getClientConfig(clientId: string, email: string) {
     return this.redisService.get<{
       clientId: string;
       clientSecret: string;
       redirectUri: string;
       email: string;
-    }>(`gmail:${clientId}:client_config`);
+    }>(`gmail:${clientId}:${email}:client_config`);
   }
 
   getClientEmail(email: string) {
@@ -118,9 +124,9 @@ export class AuthGmailService {
     }>(`gmail:${email}:client_id`);
   }
 
-  async getOAuthClient(clientId: string) {
+  async getOAuthClient(clientId: string, email: string) {
     // Obtener configuración del cliente
-    const config = await this.getClientConfig(clientId);
+    const config = await this.getClientConfig(clientId, email);
     if (!config) {
       this.logger.error(
         `getOAuthClient: Configuración para clientId "${clientId}" no encontrada`,
@@ -130,10 +136,10 @@ export class AuthGmailService {
       );
     }
 
-    const { clientSecret, redirectUri, email } = config;
+    const { clientSecret, redirectUri } = config;
 
     // Obtener credenciales guardadas
-    const creds = await this.getClientCredentials(clientId);
+    const creds = await this.getClientCredentials(clientId, email);
     if (!creds) {
       this.logger.warn(`⚠️ No hay credenciales guardadas para ${email}`);
       throw new UnauthorizedException(
@@ -160,7 +166,7 @@ export class AuthGmailService {
           await oauth2Client.refreshAccessToken();
 
         // Guardamos los nuevos tokens en Redis
-        await this.setClientCredentials(clientId, {
+        await this.setClientCredentials(clientId, email, {
           ...creds,
           access_token: newCreds.access_token!,
           expiry_date: newCreds.expiry_date || Date.now() + 3500 * 1000,
@@ -227,9 +233,9 @@ export class AuthGmailService {
     return Date.now() >= expiryDate - 5000;
   }
 
-  async exchangeCodeForTokens(code: string, clientId: string) {
+  async exchangeCodeForTokens(code: string, clientId: string, email: string) {
     try {
-      const config = await this.getClientConfig(clientId);
+      const config = await this.getClientConfig(clientId, email);
 
       if (!config) {
         this.logger.error(
@@ -240,7 +246,7 @@ export class AuthGmailService {
         );
       }
 
-      const { clientSecret, redirectUri, email } = config;
+      const { clientSecret, redirectUri } = config;
 
       // Crear cliente OAuth2
       const oauth2Client = await this.createOAuthClient(
@@ -259,7 +265,7 @@ export class AuthGmailService {
         expiry_date: Date.now() + 3500 * 1000, // aprox 1 hora
       };
 
-      await this.setClientCredentials(clientId, credentials);
+      await this.setClientCredentials(clientId, email, credentials);
 
       const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
 

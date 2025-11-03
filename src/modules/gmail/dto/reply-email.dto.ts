@@ -4,6 +4,8 @@ export class ReplyEmail {
   @IsString()
   clientId: string;
   @IsString()
+  email: string;
+  @IsString()
   messageId: string;
   @IsString()
   content: string;

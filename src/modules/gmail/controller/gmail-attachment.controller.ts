@@ -12,6 +12,7 @@ export class GmailAttachmentController {
       body.messageId,
       body.attachmentId,
       body.clientId,
+      body.email,
     );
   }
   @Post('see')
@@ -20,6 +21,7 @@ export class GmailAttachmentController {
       body.messageId,
       body.attachmentId,
       body.clientId,
+      body.email,
     );
     res.setHeader('Content-Type', body.mimeType);
     res.setHeader(

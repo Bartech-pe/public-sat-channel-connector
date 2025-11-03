@@ -39,9 +39,12 @@ export class GmailService {
 
   async setWatch(body: WatchMail) {
     try {
-      const { clientId } = body;
+      const { clientId, email } = body;
 
-      const oauth2Client = await this.authService.getOAuthClient(clientId);
+      const oauth2Client = await this.authService.getOAuthClient(
+        clientId,
+        email,
+      );
 
       const gmail = google.gmail({
         version: 'v1',
@@ -122,7 +125,10 @@ export class GmailService {
       const { clientId } = config;
 
       // Recuperar el cliente OAuth2 del usuario desde Redis
-      const oauth2Client = await this.authService.getOAuthClient(clientId);
+      const oauth2Client = await this.authService.getOAuthClient(
+        clientId,
+        emailAddress,
+      );
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -138,7 +144,6 @@ export class GmailService {
 
       const history = response.data.history || [];
       if (history.length === 0) {
-        console.log(`Sin mensajes nuevos para ${emailAddress}`);
         await this.redisService.set(lastHistoryIdKey, historyId);
         return;
       }
@@ -193,7 +198,6 @@ export class GmailService {
       // Guardar el último historyId procesado
       await this.redisService.set(lastHistoryIdKey, historyId);
     } catch (error) {
-      console.log(error);
       console.error(`Error procesando notificación de Gmail: ${error.message}`);
     }
   }
@@ -211,10 +215,6 @@ export class GmailService {
     const htmlParts = parts.filter((p) => p.mimeType.includes('text/html'));
 
     const plainParts = parts.filter((p) => p.mimeType.includes('text/plain'));
-
-    console.log('htmlParts', htmlParts);
-
-    console.log('plainParts', plainParts);
 
     // Helper para decodificar base64url
     const decode = (data: string): string => {
@@ -375,6 +375,7 @@ export class GmailService {
     message: gmail_v1.Schema$Message,
     email: string,
     clientId: string,
+    userId?: number,
   ) {
     const messageId = message.id!;
     const threadId = message.threadId!;
@@ -409,12 +410,6 @@ export class GmailService {
       message.payload,
     );
 
-    console.log('attachments', attachments);
-
-    const isSender = (from) => {
-      return from.includes(email) && !reply && !forward && !references;
-    };
-
     const payload: EmailSent = {
       messageId: messageId,
       referencesMail: referencesMail,
@@ -427,18 +422,19 @@ export class GmailService {
       inReplyTo: reply,
       content: replyContent,
       forward: forward,
-      isSender: isSender(email),
+      userId: userId,
       attachments: attachments,
       clientId: clientId,
+      email,
     };
     this.gateway.emitMailUpdated(payload);
     return email;
   }
 
   async forwardTo(body: ForwardTo) {
-    const { messageId, forwardTo, message, clientId } = body;
+    const { messageId, forwardTo, message, clientId, email } = body;
 
-    const oauth2Client = await this.authService.getOAuthClient(clientId);
+    const oauth2Client = await this.authService.getOAuthClient(clientId, email);
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
@@ -462,8 +458,6 @@ export class GmailService {
     const date = getHeader(headers, 'Date');
     const threadId = original.data.threadId;
 
-    console.log('headers', headers);
-
     const forward: ForwardBody = {
       from: from,
       subject: subject,
@@ -481,13 +475,6 @@ export class GmailService {
         raw: encodedMessage,
       },
     });
-    const data = res.data;
-    const emailForward = await this.gmailActionService.getEmailMessageForward(
-      gmail,
-      data.id!,
-      clientId,
-    );
-    return emailForward;
   }
 
   async getMessages(options: {
@@ -496,10 +483,12 @@ export class GmailService {
     pageToken?: string;
     refreshToken: string;
     clientId: string;
+    email: string;
   }): Promise<{ emails: any[]; nextPageToken?: string }> {
     try {
       const oauth2Client = await this.authService.getOAuthClient(
         options.clientId,
+        options.email,
       );
 
       const gmail = google.gmail({
@@ -516,7 +505,6 @@ export class GmailService {
       });
 
       const messages = messagesResponse.data.messages || [];
-      console.log('data', messages);
       const emails: any[] = [];
       return {
         emails,
@@ -542,9 +530,12 @@ export class GmailService {
   }
 
   async sendEmail(body: BuildCenterEmail) {
-    const raw = this.gmailActionService.BuildEmail(body);
+    const raw = this.gmailActionService.buildEmail(body);
 
-    const oauth2Client = await this.authService.getOAuthClient(body.clientId);
+    const oauth2Client = await this.authService.getOAuthClient(
+      body.clientId,
+      body.email,
+    );
 
     const gmail = google.gmail({
       version: 'v1',
@@ -566,129 +557,14 @@ export class GmailService {
       msg.data,
       body.from,
       body.clientId,
+      body.userId,
     );
   }
 
-  // async ProcessEmail(body: BuildCenterEmail) {
-  //   const send = await this.sendEmail(body);
+  async replyEmail(body: ReplyEmail) {
+    const { messageId, content, clientId, email } = body;
 
-  //   const oauth2Client = await this.authService.getOAuthClient(body.clientId);
-
-  //   const gmail = google.gmail({
-  //     version: 'v1',
-  //     auth: oauth2Client,
-  //   });
-
-  //   const response = await gmail.users.messages.get({
-  //     userId: 'me',
-  //     id: send.id!,
-  //     format: 'full',
-  //   });
-
-  //   const message = response.data;
-  //   const headers = message.payload?.headers || [];
-
-  //   const subject = getHeader(headers, 'Subject');
-  //   const from = getHeader(headers, 'From');
-  //   const to = getHeader(headers, 'To');
-  //   const date = getHeader(headers, 'date');
-  //   const referencesMail = getHeader(headers, 'Message-ID');
-  //   const references = getHeader(headers, 'References');
-  //   const reply = getHeader(headers, 'In-Reply-To');
-  //   const forward = getHeader(headers, 'X-Forwarded-From-Thread');
-
-  //   let html = '';
-
-  //   try {
-  //     const { content } = this.extractHtmlBody(message.payload);
-  //     html = content;
-  //   } catch (error) {
-  //     console.error(error);
-  //     const { content } = this.extractHtmlBodyOut(message.payload!);
-  //     html = content;
-  //   }
-
-  //   const replyContent = this.extractReplyContent(html);
-
-  //   let attachments = await this.extractAttachmentsBase64(
-  //     gmail,
-  //     message.id!,
-  //     message.payload,
-  //   );
-
-  //   console.log('content', replyContent);
-  //   console.log('attachments', attachments);
-
-  //   const email: EmailSent = {
-  //     messageId: message.id ?? '',
-  //     referencesMail: referencesMail ?? '',
-  //     threadId: message.threadId ?? '',
-  //     subject: subject ?? '',
-  //     from: from ?? '',
-  //     to: to ?? '',
-  //     date: date,
-  //     references: references,
-  //     inReplyTo: reply,
-  //     content: replyContent,
-  //     forward: forward,
-  //     attachments: attachments,
-  //   };
-  //   return email;
-  // }
-
-  // async GetEmail(messageId: string, gmail) {
-  //   const response = await gmail.users.messages.get({
-  //     userId: 'me',
-  //     id: messageId,
-  //     format: 'full',
-  //   });
-  //   const message = response.data;
-  //   const headers = message.payload?.headers || [];
-
-  //   const subject = getHeader(headers, 'Subject');
-  //   const from = getHeader(headers, 'From');
-  //   const to = getHeader(headers, 'To');
-  //   const cc = getHeader(headers, 'Cc');
-  //   const bcc = getHeader(headers, 'Bcc');
-  //   const date = getHeader(headers, 'Date');
-  //   const referencesMail = getHeader(headers, 'Message-ID');
-  //   const references = getHeader(headers, 'References');
-  //   const reply = getHeader(headers, 'In-Reply-To');
-  //   const forward = getHeader(headers, 'X-Forwarded-From-Thread');
-
-  //   const { content } = this.extractHtmlBody(message.payload);
-
-  //   let attachments = await this.extractAttachmentsBase64(
-  //     gmail,
-  //     message.id,
-  //     message.payload,
-  //   );
-
-  //   console.log('content', content);
-  //   console.log('attachments', attachments);
-
-  //   const email: EmailSent = {
-  //     messageId: message.id ?? '',
-  //     referencesMail: referencesMail ?? '',
-  //     threadId: message.threadId ?? '',
-  //     subject: subject ?? '',
-  //     from: from ?? '',
-  //     to: to ?? '',
-  //     date: date,
-  //     references: references,
-  //     inReplyTo: reply,
-  //     content: content,
-  //     forward: forward,
-  //     attachments: attachments,
-  //   };
-  //   this.gateway.emitMailUpdated(email);
-  //   return email;
-  // }
-
-  async ReplyEmail(body: ReplyEmail) {
-    const { messageId, content, threadId } = body;
-
-    const oauth2Client = await this.authService.getOAuthClient(body.clientId);
+    const oauth2Client = await this.authService.getOAuthClient(clientId, email);
 
     const gmail = google.gmail({
       version: 'v1',
@@ -703,15 +579,11 @@ export class GmailService {
       throw new InternalServerErrorException('Message not found');
     }
     const threadIdHeader = message.data.threadId;
-    console.log('threadIdHeader', threadIdHeader);
-    console.log('threadId', threadId);
     const headers = message.data.payload.headers;
 
     const subject = getHeader(headers, 'Subject');
     const from = getHeader(headers, 'From');
     const mimeMessageId = getHeader(headers, 'Message-ID');
-
-    console.log('headers', headers);
 
     // Construye el cuerpo del mensaje
     const replyBody = [
@@ -737,17 +609,21 @@ export class GmailService {
         threadId: threadIdHeader,
       },
     });
-    console.log('res', res);
-    // this.processIncomingMessage(gmail, res.data, to);
   }
 
-  async GetFile(messageId: string, attachmentId: string, clientId: string) {
-    const oauth2Client = await this.authService.getOAuthClient(clientId);
+  async GetFile(
+    messageId: string,
+    attachmentId: string,
+    clientId: string,
+    email: string,
+  ) {
+    const oauth2Client = await this.authService.getOAuthClient(clientId, email);
 
     const gmail = google.gmail({
       version: 'v1',
       auth: oauth2Client,
     });
+
     return await this.attachmnetService.GetFile(messageId, attachmentId, gmail);
   }
 }

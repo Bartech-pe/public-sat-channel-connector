@@ -14,6 +14,11 @@ export class RedisService {
     });
   }
 
+/*   async clearAll() {
+    await this.client.flushdb(); // elimina todas las keys de la DB actual
+    console.log('Base de datos limpiada');
+  } */
+
   async set(key: string, value: any, ttlSeconds?: number): Promise<void> {
     const data = JSON.stringify(value);
     if (ttlSeconds) {
@@ -37,7 +42,7 @@ export class RedisService {
     await this.client.del(key);
   }
 
-  // 🔒 Lock distribuido compatible con todas las versiones de ioredis
+  // Lock distribuido compatible con todas las versiones de ioredis
   async acquireLock(
     key: string,
     ttlMs = 5000,
@@ -47,16 +52,16 @@ export class RedisService {
     const token = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      // ✅ Forma tradicional de usar NX PX compatible con todas las versiones
+      // Forma tradicional de usar NX PX compatible con todas las versiones
       const result = await this.client.set(key, token, 'PX', ttlMs, 'NX');
 
       if (result === 'OK') {
-        this.logger.debug(`🔒 Lock adquirido en ${key}`);
+        this.logger.debug(`Lock adquirido en ${key}`);
         return token;
       }
 
       this.logger.warn(
-        `⚠️ Lock ocupado (${attempt + 1}/${maxRetries}) en ${key}, reintentando...`,
+        `Lock ocupado (${attempt + 1}/${maxRetries}) en ${key}, reintentando...`,
       );
       await new Promise((res) => setTimeout(res, retryMs));
     }
@@ -77,12 +82,10 @@ export class RedisService {
     `;
     const result = await this.client.eval(luaScript, 1, key, token);
     if (result === 1) {
-      this.logger.debug(`🔓 Lock liberado en ${key}`);
+      this.logger.debug(`Lock liberado en ${key}`);
       return true;
     } else {
-      this.logger.warn(
-        `⚠️ No se pudo liberar lock en ${key} (token no coincide)`,
-      );
+      this.logger.warn(`No se pudo liberar lock en ${key} (token no coincide)`);
       return false;
     }
   }
