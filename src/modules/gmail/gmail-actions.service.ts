@@ -29,6 +29,7 @@ export class GmailActionService {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
   }
+
   BuildForward(body: ForwardBody) {
     const {
       subject,
@@ -48,16 +49,18 @@ export class GmailActionService {
       `X-Forwarded-Original-Message: ${messageId}`,
       `Content-Type: text/html; charset="UTF-8"`,
       ``,
-      message ? `${message}<hr/>` : ``,
-      `<b>---------- Mensaje reenviado ----------</b><br/>`,
-      `<b>De:</b> ${from}<br/>`,
-      `<b>Fecha:</b> ${date}<br/>`,
-      `<b>Asunto:</b> ${subject}<br/><br/>`,
-      `${snippet}`,
+      message ?? ``,
+      `<div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>
+      De: <span dir="auto">&lt; ${from}&gt;</span><br>
+      Para: ${date}<br>
+      Asunto: Re: ${subject}<br>
+      Para: ${forwardTo}&gt;<br></div><br><br>${snippet}
+      `,
     ].join('\n');
     const encodedMessage = this.encodeMessage(rawMessage);
     return encodedMessage;
   }
+
   BuildReply(body: ReplyBody) {
     const rawMessage = [
       `To: ${body.from}`,
@@ -71,10 +74,16 @@ export class GmailActionService {
     const encodedMessage = this.encodeMessage(rawMessage);
     return encodedMessage;
   }
+
   BuildEmail(body: BuildCenterEmail) {
     const headers: string[] = [];
+
+    const toHeader = body.name ? `"${body.name}" <${body.to}>` : body.to;
+
+    console.log('toHeader', toHeader);
+
     headers.push(`From: ${body.from}`);
-    headers.push(`To: ${body.to.join(', ')}`);
+    headers.push(`To: ${toHeader}`);
     if (body.cc) headers.push(`Cc: ${body.cc}`);
     if (body.bcc?.length) headers.push(`Bcc: ${body.bcc.join(', ')}`);
     const encodedSubject = `=?UTF-8?B?${Buffer.from(body.subject, 'utf-8').toString('base64')}?=`;
@@ -165,7 +174,11 @@ export class GmailActionService {
     const raw = this.toBase64Url(mime);
     return raw;
   }
-  async getEmailMessageForward(gmail: gmail_v1.Gmail, messageId: string) {
+  async getEmailMessageForward(
+    gmail: gmail_v1.Gmail,
+    messageId: string,
+    clientId: string,
+  ) {
     const response = await gmail.users.messages.get({
       userId: 'me',
       id: messageId,
@@ -203,6 +216,7 @@ export class GmailActionService {
       content: content,
       forward: forward,
       attachments: attachments,
+      clientId: clientId,
     };
     return email;
   }

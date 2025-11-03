@@ -9,8 +9,10 @@ export class EmailSent {
   references?: string | null;
   inReplyTo?: string | null;
   forward?: string | null;
+  isSender?: boolean;
   content: string;
   attachments: AttachmentContent[];
+  clientId: string;
 }
 
 export class EmailSentContent {

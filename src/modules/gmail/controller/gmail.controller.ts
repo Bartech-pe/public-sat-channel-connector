@@ -36,7 +36,7 @@ export class GmailController {
 
   @Post('sendemail')
   async SendEmail(@Body() body: BuildCenterEmail) {
-    return await this.emailService.ProcessEmail(body);
+    return await this.emailService.sendEmail(body);
   }
 
   @Post('messages')
