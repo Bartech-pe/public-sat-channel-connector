@@ -623,7 +623,6 @@ export class GmailService {
       version: 'v1',
       auth: oauth2Client,
     });
-
     return await this.attachmnetService.GetFile(messageId, attachmentId, gmail);
   }
 }

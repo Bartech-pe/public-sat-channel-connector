@@ -1,5 +1,5 @@
 import { IsInt, IsString, IsOptional, Min, Max, IsNotEmpty } from 'class-validator';
-import { ValidationMessages as v} from 'src/common/messages/validation-messages';
+import { ValidationMessages as v } from 'src/common/messages/validation-messages';
 
 export class CreateSurveyDto {
   @IsInt({ message: v.isInt('assistanceId') })
@@ -22,6 +22,9 @@ export class CreateSurveyDto {
   @IsNotEmpty({ message: v.isNotEmpty('rating') })
   rating: number;
 
-  @IsOptional()
-  userId?: number | null;
+  @IsInt({ message: v.isInt('userId') })
+  @IsNotEmpty({ message: v.isNotEmpty('userId') })
+  userId: number;
+
+
 }

@@ -14,7 +14,7 @@ export class RedisService {
     });
   }
 
-/*   async clearAll() {
+  /*   async clearAll() {
     await this.client.flushdb(); // elimina todas las keys de la DB actual
     console.log('Base de datos limpiada');
   } */
