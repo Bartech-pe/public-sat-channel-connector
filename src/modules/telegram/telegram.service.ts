@@ -12,6 +12,7 @@ import { readdir, rm, stat } from 'fs/promises';
 import path, { join } from 'path';
 import { ChatHubService } from '../chat-hub/chat-hub.service';
 import { channelConfig } from 'config/env';
+import { markdownToEntitiesAuto } from 'src/common/hooks/format-markdown';
 
 export interface AuthStatuses {
   authMethod: 'EMAIL' | 'DEFAULT';
@@ -703,12 +704,14 @@ export class TelegramService implements OnModuleInit {
         return { success: false, error: errMsg };
       }
 
+      const formatted = markdownToEntitiesAuto(text)
+
       let message = await client.invoke({
         _: 'sendMessage',
         chat_id: chatId,
         input_message_content: {
           _: 'inputMessageText',
-          text: { _: 'formattedText', text },
+          text: formatted,
         },
       });
 
