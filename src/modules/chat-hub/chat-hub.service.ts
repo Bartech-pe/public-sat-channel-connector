@@ -72,7 +72,6 @@ export class ChatHubService {
 
   async createCitizenInCrm(payload: CreateChannelCitizenDto): Promise<any> {
     try {
-      this.logger.debug('entra');
       const crmResponse = await this.client.post('v1/channel-citizen', payload);
       return crmResponse.data;
     } catch (error) {

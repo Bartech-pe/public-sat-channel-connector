@@ -482,6 +482,7 @@ export class TelegramService implements OnModuleInit {
           awaitingCode: false,
           awaitingEmailCode: true,
         });
+
         this.logger.log(
           `📩 Código de autenticación solicitado vía email para ${phoneNumber}`,
         );
@@ -571,6 +572,7 @@ export class TelegramService implements OnModuleInit {
         _: 'checkAuthenticationEmailCode',
         code: { _: 'emailAddressAuthenticationCode', code: code.trim() },
       });
+
       this.authStates.delete(phoneNumber);
       this.clients.set(phoneNumber, client);
       this.logger.log(`✅ Sesión creada exitosamente para ${phoneNumber}`);

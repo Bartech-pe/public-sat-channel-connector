@@ -17,7 +17,7 @@ export class BuildEmail {
   @IsString()
   from: string;
   @IsArray()
-  to: string;
+  to: string[];
   @IsString()
   @IsOptional()
   cc?: string;
@@ -45,17 +45,12 @@ export class FileEmail {
 
 export class BuildCenterEmail extends BuildEmail {
   refreshToken: string;
-  name?: string;
   clientId: string;
-  email: string;
-  userId?: number;
 }
 
 export class WatchMail {
   @IsString()
   clientId: string;
-  @IsString()
-  email: string;
   @IsString()
   refreshToken: string;
   @IsString()

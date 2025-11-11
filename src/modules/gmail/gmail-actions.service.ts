@@ -29,7 +29,6 @@ export class GmailActionService {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
   }
-
   BuildForward(body: ForwardBody) {
     const {
       subject,
@@ -49,18 +48,16 @@ export class GmailActionService {
       `X-Forwarded-Original-Message: ${messageId}`,
       `Content-Type: text/html; charset="UTF-8"`,
       ``,
-      message ?? ``,
-      `<div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>
-      De: <span dir="auto">&lt; ${from}&gt;</span><br>
-      Para: ${date}<br>
-      Asunto: Re: ${subject}<br>
-      Para: ${forwardTo}&gt;<br></div><br><br>${snippet}
-      `,
+      message ? `${message}<hr/>` : ``,
+      `<b>---------- Mensaje reenviado ----------</b><br/>`,
+      `<b>De:</b> ${from}<br/>`,
+      `<b>Fecha:</b> ${date}<br/>`,
+      `<b>Asunto:</b> ${subject}<br/><br/>`,
+      `${snippet}`,
     ].join('\n');
     const encodedMessage = this.encodeMessage(rawMessage);
     return encodedMessage;
   }
-
   BuildReply(body: ReplyBody) {
     const rawMessage = [
       `To: ${body.from}`,
@@ -74,14 +71,10 @@ export class GmailActionService {
     const encodedMessage = this.encodeMessage(rawMessage);
     return encodedMessage;
   }
-
-  buildEmail(body: BuildCenterEmail) {
+  BuildEmail(body: BuildCenterEmail) {
     const headers: string[] = [];
-
-    const toHeader = body.name ? `"${body.name}" <${body.to}>` : body.to;
-
     headers.push(`From: ${body.from}`);
-    headers.push(`To: ${toHeader}`);
+    headers.push(`To: ${body.to.join(', ')}`);
     if (body.cc) headers.push(`Cc: ${body.cc}`);
     if (body.bcc?.length) headers.push(`Bcc: ${body.bcc.join(', ')}`);
     const encodedSubject = `=?UTF-8?B?${Buffer.from(body.subject, 'utf-8').toString('base64')}?=`;
@@ -171,6 +164,47 @@ export class GmailActionService {
     const mime = `${headers.join('\r\n')}\r\n\r\n${content}`;
     const raw = this.toBase64Url(mime);
     return raw;
+  }
+  async getEmailMessageForward(gmail: gmail_v1.Gmail, messageId: string) {
+    const response = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    });
+    const message = response.data;
+    const headers = message.payload?.headers || [];
+
+    const subject = getHeader(headers, 'Subject');
+    const from = getHeader(headers, 'From');
+    const to = getHeader(headers, 'To');
+    const referencesMail = getHeader(headers, 'Message-ID');
+    const references = getHeader(headers, 'References');
+    const reply = getHeader(headers, 'In-Reply-To');
+    const forward = getHeader(headers, 'X-Forwarded-From-Thread');
+
+    const { content } = this.extractHtmlBody(message.payload);
+    let attachments = await this.extractAttachmentsBase64(
+      gmail,
+      message.payload,
+    );
+
+    console.log('content', content);
+    console.log('attachments', attachments);
+
+    const email: EmailSent = {
+      messageId: message.id ?? '',
+      referencesMail: referencesMail ?? '',
+      threadId: message.threadId ?? '',
+      subject: subject ?? '',
+      from: from ?? '',
+      to: to ?? '',
+      references: references,
+      inReplyTo: reply,
+      content: content,
+      forward: forward,
+      attachments: attachments,
+    };
+    return email;
   }
 
   private GetParts(part: gmail_v1.Schema$MessagePart) {

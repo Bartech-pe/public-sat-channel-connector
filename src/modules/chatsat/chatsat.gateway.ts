@@ -20,6 +20,20 @@ export class ChatsatGateway {
     @Inject(forwardRef(() => ChatHubGateway))
     private readonly chatHubGateway: ChatHubGateway,
   ) {}
+  
+  @SubscribeMessage('joinRoom')
+  handleJoinRoom(
+    @MessageBody() data: { assistanceId: any },
+    @ConnectedSocket() client: Socket,
+  ) {
+    this.logger.debug(`joined room ${data}`);
+    this.logger.debug(`room: ${data.assistanceId}`);
+    client.join(data.assistanceId.toString());
+    this.logger.debug(client.rooms);
+    this.server.to(data.assistanceId.toString()).emit("room", `Cliente ${client.id} se unió a ${data.assistanceId}`)
+    console.log(`Cliente ${client.id} se unió a ${data.assistanceId}`);
+    return { joined: data.assistanceId };
+  }
 
   handleConnection(client: Socket) {
     this.accessToken = client.handshake.auth?.token || client.handshake.headers['authorization'];
@@ -33,24 +47,34 @@ export class ChatsatGateway {
     this.logger.log(`La conexión con el cliente ${client.id} se ha establecido correctamente.`, )
 	}
 
-  @SubscribeMessage('message.incoming')
-  async handleIncoming(
-    @MessageBody() data: IncomingMessage,
+  // @SubscribeMessage('message.incoming')
+  // async handleIncoming(
+  //   @MessageBody() data: IncomingMessage,
+  //   @ConnectedSocket() client: Socket
+  // ): Promise<void> {
+  //   const { attachments } = data.payload;
+  //   const token  = client.handshake.auth?.token || client.handshake.headers['authorization'];
+
+
+  //   if (attachments?.length) {
+  //     data.payload.attachments = attachments.map(att => ({
+  //       ...att,
+  //       type: att.extension ? this.getFileType(att.extension) : att.type,
+  //     }));
+  //   }
+
+  //   this.chatHubGateway.broadcastMessage({...data, token: token});
+  // }
+
+  @SubscribeMessage('chat.init')
+  async handleChatInit(
     @ConnectedSocket() client: Socket
   ): Promise<void> {
-    const { attachments } = data.payload;
     const token  = client.handshake.auth?.token || client.handshake.headers['authorization'];
-
-
-    if (attachments?.length) {
-      data.payload.attachments = attachments.map(att => ({
-        ...att,
-        type: att.extension ? this.getFileType(att.extension) : att.type,
-      }));
-    }
-
-    this.chatHubGateway.broadcastMessage({...data, token: token});
+    this.logger.debug(token)
+    // this.chatHubGateway.broadcastMessage({...data, token: token});
   }
+
 
 
 
@@ -66,7 +90,12 @@ export class ChatsatGateway {
 
   broadcastMessage(message: OutgoingPayload) {
     try {
-      this.server.emit('message.outgoing', message);
+      this.logger.debug("diavlo ", message.assistanceId)
+      if (message.assistanceId) {
+        this.server.to(message.assistanceId?.toString()).emit('message.outgoing', message);
+      } else {
+        this.server.emit('message.outgoing', message);
+      }
       this.logger.debug(message)
     } catch (error) {
       this.logger.error(`Error al emitir mensaje: ${error.message}`);
@@ -76,7 +105,13 @@ export class ChatsatGateway {
   broadcastCompletedChatEvent(payload: IChannelChatInformation)
   {
     try {
-      this.server.emit('chat.status.completed', payload)
+      this.logger.debug("diavlo ", payload.assistanceId)
+      this.logger.debug(String(payload.assistanceId))
+      if (!payload.assistanceId) {
+        this.server.emit('chat.status.completed', payload)
+      } else {
+        this.server.to(String(payload.assistanceId)).emit('chat.status.completed', payload)
+      }
     } catch (error) {
       this.logger.error(error.toString())
     }
@@ -85,7 +120,12 @@ export class ChatsatGateway {
   broadcastTypingIndicator(payload: IChannelChatInformation)
   {
     try {
-      this.server.emit('chat.status.typing.indicator', payload)
+      if (!payload.assistanceId) {
+        this.server.emit('chat.status.typing.indicator', payload)
+      } else {
+        this.server.to(String(payload.assistanceId)).emit('chat.status.typing.indicator', payload)
+      }
+      
       this.logger.debug(payload)
     } catch (error) {
       this.logger.error(error.toString())

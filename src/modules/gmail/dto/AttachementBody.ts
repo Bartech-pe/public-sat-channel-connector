@@ -4,8 +4,6 @@ export class AttachementBody {
   @IsString()
   clientId: string;
   @IsString()
-  email: string;
-  @IsString()
   messageId: string;
   @IsString()
   attachmentId: string;
